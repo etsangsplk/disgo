@@ -27,6 +27,7 @@ import (
 	"github.com/dispatchlabs/disgo/commons/utils"
 	"github.com/dispatchlabs/disgo/disgover"
 	"github.com/dispatchlabs/disgo/commons/queue"
+	"github.com/dispatchlabs/disgo/commons/pubsub"
 	"math/big"
 )
 
@@ -53,6 +54,7 @@ func GetDAPoSService() *DAPoSService {
 			queueChan: make(chan *types.Gossip, 1000),
 			timoutChan: make(chan bool, 1000),
 			gossipQueue: queue.NewGossipQueue(),
+			HTTPPublisher: pubsub.NewHTTPPublisher(),
 		} // TODO: What should this be?
 	})
 	return daposServiceInstance
@@ -65,6 +67,7 @@ type DAPoSService struct {
 	queueChan      	chan *types.Gossip
 	timoutChan 		chan bool
 	gossipQueue 	*queue.GossipQueue
+	HTTPPublisher 	*pubsub.HTTPPublisher
 }
 
 // IsRunning -
@@ -100,6 +103,8 @@ func (this *DAPoSService) disGoverServiceInitFinished() {
 	go this.gossipWorker()
 	go this.transactionWorker()
 	//go this.queueWorker()
+
+	this.HTTPPublisher.CreateTopic(types.TopicAcceptedTransaction)
 
 	utils.Events().Raise(Events.DAPoSServiceInitFinished)
 }

@@ -19,12 +19,16 @@ package dapos
 import (
 	"io/ioutil"
 	"net/http"
+	"encoding/json"
 
 	"fmt"
 
 	"github.com/dispatchlabs/disgo/commons/services"
 	"github.com/dispatchlabs/disgo/commons/types"
 	"github.com/dispatchlabs/disgo/commons/utils"
+
+	"github.com/dispatchlabs/disgo/commons/pubsub"
+	
 	"github.com/gorilla/mux"
 )
 
@@ -37,16 +41,17 @@ func (this *DAPoSService) WithHttp() *DAPoSService {
 	services.GetHttpRouter().HandleFunc("/v1/transactions/from/{address}", this.getTransactionsByFromAddressHandler).Methods("GET")
 	services.GetHttpRouter().HandleFunc("/v1/transactions/to/{address}", this.getTransactionsByToAddressHandler).Methods("GET")
 	services.GetHttpRouter().HandleFunc("/v1/transactions", this.newTransactionHandler).Methods("POST")
-	services.GetHttpRouter().HandleFunc("/v1/transactions/{hash}", this.getTransactionHandler).Methods("GET") //TODO: support pagination
-	services.GetHttpRouter().HandleFunc("/v1/transactions", this.getTransactionsHandler).Methods("GET")       //TODO: to be deprecated
+	services.GetHttpRouter().HandleFunc("/v1/transactions/{hash}", this.getTransactionHandler).Methods("GET")
+	services.GetHttpRouter().HandleFunc("/v1/transactions", this.getTransactionsHandler).Methods("GET")
+	// Pub/sub of transaction acceptance
+	services.GetHttpRouter().HandleFunc("/v1/subscriptions", this.subscribeHandler).Methods("POST")
+	// services.GetHttpRouter().HandleFunc("/v1/subscriptions/{hash}", this.unsubscribeHandler).Methods("DELETE")
 	//Artifacts
-	services.GetHttpRouter().HandleFunc("/v1/artifacts/{query}", this.unsupportedFunctionHandler).Methods("GET") //TODO: support pagination
+	services.GetHttpRouter().HandleFunc("/v1/artifacts/{query}", this.unsupportedFunctionHandler).Methods("GET")
 	services.GetHttpRouter().HandleFunc("/v1/artifacts/", this.unsupportedFunctionHandler).Methods("POST")
 	services.GetHttpRouter().HandleFunc("/v1/artifacts/{hash}", this.unsupportedFunctionHandler).Methods("GET")
 	//delegates
 	services.GetHttpRouter().HandleFunc("/v1/delegates", this.getDelegatesHandler).Methods("GET")
-	services.GetHttpRouter().HandleFunc("/v1/delegates/subscribe", this.unsupportedFunctionHandler).Methods("POST")
-	services.GetHttpRouter().HandleFunc("/v1/delegates/unsubscribe", this.unsupportedFunctionHandler).Methods("POST")
 
 	//Page
 	services.GetHttpRouter().HandleFunc("/v1/page", this.unsupportedFunctionHandler).Methods("GET") //TODO:only return hashes
@@ -229,6 +234,21 @@ func (this *DAPoSService) getGossipHandler(responseWriter http.ResponseWriter, r
 func (this *DAPoSService) getReceiptHandler(responseWriter http.ResponseWriter, request *http.Request) {
 	vars := mux.Vars(request)
 	response := this.GetReceipt(vars["hash"])
+	setHeaders(response, &responseWriter)
+	responseWriter.Write([]byte(response.String()))
+}
+
+// subscribeHandler
+func (this *DAPoSService) subscribeHandler(responseWriter http.ResponseWriter, request *http.Request) {
+	decoder := json.NewDecoder(request.Body)
+	var subReq pubsub.SubscriptionRequest
+	err := decoder.Decode(&subReq)
+	if err != nil {
+		utils.Error("unable to read HTTP body of request", err)
+		services.Error(responseWriter, fmt.Sprintf(`{"status":"%s: %v"}`, types.StatusInternalError, err), http.StatusInternalServerError)
+		return
+	}
+	response := this.CreateSubscription(subReq)
 	setHeaders(response, &responseWriter)
 	responseWriter.Write([]byte(response.String()))
 }

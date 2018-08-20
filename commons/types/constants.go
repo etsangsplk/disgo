@@ -50,6 +50,7 @@ const (
 	StatusJsonParseError               = "StatusJsonParseError"
 	StatusInternalError                = "InternalError"
 	StatusUnavailableFeature           = "UnavailableFeature"
+	StatusTopicNotFound           	   = "StatusTopicNotFound"
 )
 
 const (
@@ -85,4 +86,9 @@ const (
 var (
 	ErrNotFound       = errors.New("not found")
 	ErrInvalidRequest = errors.New("invalid request")
+)
+
+// Subscription Topics
+const (
+	TopicAcceptedTransaction = "AcceptedTransaction"
 )

@@ -24,6 +24,7 @@ import (
 	"github.com/dispatchlabs/disgo/commons/services"
 	"github.com/dispatchlabs/disgo/commons/types"
 	"github.com/dispatchlabs/disgo/commons/utils"
+	"github.com/dispatchlabs/disgo/commons/pubsub"
 	"github.com/dispatchlabs/disgo/disgover"
 )
 
@@ -363,5 +364,33 @@ func (this *DAPoSService) GetGossip(hash string) *types.Response {
 	}
 	utils.Info(fmt.Sprintf("retrieved Gossip [tx hash=%s, status=%s]", hash, response.Status))
 
+	return response
+}
+
+// CreateSubscription
+func (this *DAPoSService) CreateSubscription(subReq pubsub.SubscriptionRequest) *types.Response {
+	response := types.NewResponse()
+
+	// Delegate?
+	if disgover.GetDisGoverService().ThisNode.Type == types.TypeDelegate {
+		T, err := this.HTTPPublisher.GetTopic(subReq.Topic)
+		if err != nil {
+			response.Status = types.StatusTopicNotFound
+			response.HumanReadableStatus = fmt.Sprintf("Topic \"%s\" is invalid", subReq.Topic)
+		} else {
+			sub := pubsub.NewSubscription(subReq.Endpoint, subReq.Headers, subReq.Address)
+			_, err = T.Subscribe(sub)
+			if err != nil {
+				response.Status = types.StatusTopicNotFound
+				response.HumanReadableStatus = err.Error()
+			} else {
+				response.Data = fmt.Sprintf("{\"hash\":\"%s\"}", sub.Hash)
+				response.Status = types.StatusOk
+			}
+		}
+	} else {
+		response.Status = types.StatusNotDelegate
+		response.HumanReadableStatus = types.StatusNotDelegateAsHumanReadable
+	}
 	return response
 }
