@@ -142,18 +142,26 @@ func (this *DAPoSService) newTransactionHandler(responseWriter http.ResponseWrit
 	defer txn.Discard()
 
 	if transaction.Type == types.TypeExecuteSmartContract {
+		utils.Info("HTTP: Executing Smart Contrace")
 		contractTx, err := types.ToTransactionByAddress(txn, transaction.To)
-
-		transaction.Abi = hex.EncodeToString([]byte(contractTx.Abi))
 		if err != nil {
 			utils.Error(err)
 		}
+		utils.Info("HTTP: Retrieved contract from badger")
+
+		transaction.Abi = hex.EncodeToString([]byte(contractTx.Abi))
+		utils.Info("HTTP: Set Encoded ABI")
+		if err != nil {
+			utils.Error(err)
+		}
+
 		transaction.Params, err = helper.GetConvertedParams(transaction)
 		if err != nil {
 			utils.Error("Paramater type error", err)
 			services.Error(responseWriter, fmt.Sprintf(`{"status":"%s: %v"}`, types.StatusJsonParseError, err), http.StatusBadRequest)
 			return
 		}
+		utils.Info("HTTP: Successfully converted params: ", transaction.Params)
 
 	}
 	response := this.NewTransaction(transaction)

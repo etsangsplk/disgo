@@ -10,10 +10,11 @@ import (
 	"strings"
 	"github.com/dispatchlabs/disgo/commons/crypto"
 	"github.com/dispatchlabs/disgo/commons/types"
+	"github.com/dispatchlabs/disgo/commons/utils"
 )
 
 func GetConvertedParams(tx *types.Transaction) ([]interface{}, error) {
-
+	utils.Info("ABI Helper GetConvertedParams")
 	theABI, err := GetABI(tx.Abi)
 	if err != nil {
 		return nil, err
@@ -58,6 +59,7 @@ func GetConvertedParams(tx *types.Transaction) ([]interface{}, error) {
 		}
 	}
 	if !found {
+		utils.Info("No Params were processed")
 		return nil, errors.New(fmt.Sprintf("This method %s is not valid for this contract", tx.Method))
 	}
 	return result, nil
@@ -148,6 +150,7 @@ func getValues(arg abi.Argument, values []interface{}) (interface{}, error) {
 
 //numerics from json are always serialized as float64
 func getValue(arg abi.Argument, value interface{}) (interface{}, error) {
+	utils.Info("getValue --> ", value)
 	nbrValue, isNumber := value.(float64)
 	if arg.Type.String() == "int256" || arg.Type.String() == "uint256" {
 		if !isNumber {return nil, errors.Errorf("number value required, provided value is '%v'", value)}
