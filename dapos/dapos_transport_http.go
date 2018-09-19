@@ -138,6 +138,7 @@ func (this *DAPoSService) newTransactionHandler(responseWriter http.ResponseWrit
 			return
 		}
 	}
+
 	txn := services.NewTxn(true)
 	defer txn.Discard()
 
