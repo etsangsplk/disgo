@@ -33,6 +33,9 @@ import (
 	"github.com/dispatchlabs/disgo/dvm"
 	"github.com/dispatchlabs/disgo/dvm/ethereum/abi"
 	"github.com/dispatchlabs/disgo/dvm/ethereum/params"
+	"math"
+	"encoding/base64"
+	"bytes"
 )
 
 var delegateMap = map[string]*types.Node{}
@@ -546,21 +549,13 @@ func executeTransaction(transaction *types.Transaction, receipt *types.Receipt, 
 	window := helper.AddHertz(txn, services.GetCache(), hertz);
 	rateLimit.Set(*window, txn, services.GetCache())
 
-	//If we wanted to also lock up for the receiver then we need this code
-	//rateLimitTo, err := types.NewRateLimit(transaction.To, transaction.Hash,  hertz)
-	//if err != nil {
-	//	utils.Error(err)
-	//}
-	//window = helper.AddHertz(txn, services.GetCache(), hertz);
-	//rateLimitTo.Set(*window, txn, services.GetCache())
+	if availableHertz <= minHertzUsed {
+		msg := fmt.Sprintf("Account %s has a hertz balance of %d\n", fromAccount.Address, availableHertz)
+		utils.Error(msg)
+		receipt.SetStatusWithNewTransaction(services.GetDb(), types.StatusInsufficientHertz)
+		return
+	}
 
-	//if availableHertz <= minHertzUsed {
-	//	msg := fmt.Sprintf("Account %s has a hertz balance of %d\n", fromAccount.Address, availableHertz)
-	//	utils.Error(msg)
-	//	receipt.SetStatusWithNewTransaction(services.GetDb(), types.StatusInsufficientHertz)
-	//	return
-	//}
-	//
 
 	//Change this to set hertz to the
 	transaction.Hertz = hertz
@@ -595,6 +590,19 @@ func executeTransaction(transaction *types.Transaction, receipt *types.Receipt, 
 		receipt.Cache(services.GetCache())
 		return
 	}
+
+	//Also lock up for the receiver
+	//This code is way down here so that the rate limiting works "after" the account is saved.  New accounts don't exist until the above persist.
+	//Take the lower value of Hertz for this transaction and the receivers balance (so we don't lock more than they have)
+	maxToLock := math.Min(float64(toAccount.Balance.Uint64()), float64(hertz))
+
+	rateLimitTo, err := types.NewRateLimit(transaction.To, transaction.Hash, uint64(maxToLock))
+	if err != nil {
+		utils.Error(err)
+	}
+	window = helper.AddHertz(txn, services.GetCache(), hertz);
+	rateLimitTo.Set(*window, txn, services.GetCache())
+
 
 	// Save receipt.
 	receipt.Status = types.StatusOk
@@ -661,6 +669,19 @@ func processDVMResult(transaction *types.Transaction, dvmResult *dvm.DVMResult, 
 					} else {
 						errorToReturn = err
 						utils.Error(err)
+					}
+					for i, arg := range method.Outputs {
+						if arg.Type.T == abi.BytesTy {
+							valBytes := receipt.ContractResult[i].([]byte)
+							base64Bytes := make([]byte, base64.StdEncoding.DecodedLen(len(valBytes)))
+							_, valErr := base64.StdEncoding.Decode(base64Bytes, valBytes)
+							utils.Info(fmt.Sprintf("byteString = %v and base64Text = %v", string(valBytes), string(base64Bytes)))
+							if valErr != nil {
+								utils.Error(valErr)
+							}
+							base64Bytes = bytes.Trim(base64Bytes, "\x00")
+							receipt.ContractResult[i] = string(base64Bytes)
+						}
 					}
 				}
 			}

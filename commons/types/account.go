@@ -25,14 +25,16 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/patrickmn/go-cache"
+	"strconv"
 
 	"math/big"
+
+	"github.com/patrickmn/go-cache"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dispatchlabs/disgo/commons/crypto"
 	"github.com/dispatchlabs/disgo/commons/utils"
+	"github.com/pkg/errors"
 )
 
 var accountInstance *Account
@@ -50,7 +52,7 @@ type Account struct {
 	Created         time.Time
 
 	// From Ethereum Account
-	Nonce    uint64
+	Nonce    uint64 // Note: This field must exist for DVM purposes, but is not actually used.
 	Root     crypto.HashBytes // merkle root of the storage trie
 	CodeHash []byte
 }
@@ -118,7 +120,21 @@ func (this *Account) UnmarshalJSON(bytes []byte) error {
 		this.Name = jsonMap["name"].(string)
 	}
 	if jsonMap["balance"] != nil {
-		this.Balance = big.NewInt(int64(jsonMap["balance"].(float64)))
+		var bFloat float64
+		balance, ok1 := jsonMap["balance"].(string)
+		if !ok1 {
+			var ok2 bool
+			bFloat, ok2 = jsonMap["balance"].(float64)
+			if !ok2 {
+				return errors.Errorf("value for field 'balance' must be a string")
+			}
+		} else {
+			bFloat, err = strconv.ParseFloat(balance, 64)
+			if err != nil {
+			  return errors.Errorf("value for field 'balance' must be convertable to an integer")
+			}
+		}
+		this.Balance = big.NewInt(int64(bFloat))
 	}
 	if jsonMap["transactionHash"] != nil {
 		this.TransactionHash = jsonMap["transactionHash"].(string)
@@ -137,9 +153,9 @@ func (this *Account) UnmarshalJSON(bytes []byte) error {
 		}
 		this.Created = created
 	}
-	if jsonMap["nonce"] != nil {
-		this.Nonce = uint64(jsonMap["nonce"].(float64))
-	}
+	// if jsonMap["nonce"] != nil {
+	// 	this.Nonce = uint64(jsonMap["nonce"].(float64))
+	// }
 	// if jsonMap["root"] != nil {
 	// 	this.Root = crypto.GetHashBytes(jsonMap["root"].(string))
 	// }
@@ -156,24 +172,24 @@ func (this Account) MarshalJSON() ([]byte, error) {
 		Address         string    `json:"address"`
 		PrivateKey      string    `json:"privateKey,omitempty"`
 		Name            string    `json:"name"`
-		Balance         int64     `json:"balance"`
-		HertzAvailable  uint64    `json:"hertzAvailable"`
+		Balance         string    `json:"balance"`
+		HertzAvailable  string    `json:"hertzAvailable"`
 		TransactionHash string    `json:"transactionHash,omitempty"`
 		Updated         time.Time `json:"updated"`
 		Created         time.Time `json:"created"`
-		Nonce           uint64    `json:"nonce"`
+		// Nonce           uint64    `json:"nonce"`
 		// Root       string    `json:"root"`
 		// CodeHash   string    `json:"codehash"`
 	}{
 		Address:         this.Address,
 		PrivateKey:      this.PrivateKey,
 		Name:            this.Name,
-		Balance:         this.Balance.Int64(),
-		HertzAvailable:	 this.HertzAvailable,
+		Balance:         this.Balance.String(),
+		HertzAvailable:	 strconv.FormatUint(this.HertzAvailable, 10),
 		TransactionHash: this.TransactionHash,
 		Updated:         this.Updated,
 		Created:         this.Created,
-		Nonce:           this.Nonce,
+		// Nonce:           this.Nonce,
 		// Root:       crypto.Encode(this.Root.Bytes()),
 		// CodeHash:   crypto.Encode(this.CodeHash),
 	})

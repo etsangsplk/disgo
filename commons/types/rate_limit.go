@@ -10,26 +10,19 @@ import (
 	"time"
 )
 
-const (
-	EXP_GROWTH = 1.645504582
-	TX_PER_MINUTE = 600
-	HERTZ_PER_TRANSACTION = 3400
-	HERTZ_PER_MINUTE = TX_PER_MINUTE * HERTZ_PER_TRANSACTION
-)
-
 type RateLimit struct {
-	Address 	string
+	Address     string
 	TxRateLimit *TxRateLimit
-	Existing	*AccountRateLimits
+	Existing    *AccountRateLimits
 }
 
 type TxRateLimit struct {
-	Amount 		uint64
-	TxHash  	string
+	Amount uint64
+	TxHash string
 }
 
 type AccountRateLimits struct {
-	TxHashes	[]string
+	TxHashes []string
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -37,10 +30,10 @@ type AccountRateLimits struct {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 func NewRateLimit(address, txHash string, amount uint64) (*RateLimit, error) {
-	return &RateLimit {
-		Address:	address,
+	return &RateLimit{
+		Address:     address,
 		TxRateLimit: &TxRateLimit{amount, txHash},
-		Existing: &AccountRateLimits{make([]string, 0)},
+		Existing:    &AccountRateLimits{make([]string, 0)},
 	}, nil
 }
 
@@ -66,7 +59,6 @@ func (this *RateLimit) Set(window Window, txn *badger.Txn, cache *cache.Cache) e
 	}
 	return nil
 }
-
 
 func (this *RateLimit) cache(window Window, cache *cache.Cache) {
 	cache.Set(getAccountRateLimitKey(this.Address), this.Existing, TransactionCacheTTL)
@@ -100,14 +92,16 @@ func (this RateLimit) ToPrettyJson() string {
 // Bound the algorithm by lower of 1 second and a max of 24 hours.
 func GetCurrentTTL(cache *cache.Cache, window *Window) {
 	// guard - if we're below the base hertz threshold keep TTL at zero
-	if window.Sum <= HERTZ_PER_MINUTE {
-		window.TTL = time.Second
+
+	// base Hz is calculated by TxPerMin * AvgHzPerTxn
+	if window.Sum <= uint64(GetConfig().RateLimits.TxPerMinute*GetConfig().RateLimits.AvgHzPerTxn) {
+		window.TTL = GetConfig().RateLimits.MinTTL
 		return
 	}
 
 	var previousTTL = time.Duration(0)
 
-	if previousWindow, ok := ToWindowFromCache(cache, window.Id - 1); !ok {
+	if previousWindow, ok := ToWindowFromCache(cache, window.Id-1); !ok {
 		previousTTL = 0
 	} else {
 		previousTTL = time.Duration(math.Max(0, float64(previousWindow.TTL)))
@@ -127,17 +121,16 @@ func GetCurrentTTL(cache *cache.Cache, window *Window) {
 	}
 
 	// bounds
-	if window.TTL > time.Hour * 24 {
-		window.TTL = time.Hour * 24
+	if window.TTL > GetConfig().RateLimits.MaxTTL {
+		window.TTL = GetConfig().RateLimits.MaxTTL
 	}
-	if window.TTL < time.Second {
-		window.TTL = time.Second
+	if window.TTL < GetConfig().RateLimits.MinTTL {
+		window.TTL = GetConfig().RateLimits.MinTTL
 	}
 
 	utils.Info("Current TTL = ", window.TTL.String())
 	utils.Info("Slope = ", window.Slope)
 }
-
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  Account
@@ -235,7 +228,6 @@ func (this TxRateLimit) string() string {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //  Helpers
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 
 func CalculateLockedAmount(txn *badger.Txn, c *cache.Cache, address string) (uint64, error) {
 	acctRateLimit, err := GetAccountRateLimit(txn, c, address)

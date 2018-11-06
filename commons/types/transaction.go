@@ -24,6 +24,7 @@ import (
 	"time"
 	"strings"
 	"sort"
+	"strconv"
 
 	"fmt"
 
@@ -151,7 +152,7 @@ func (this Transaction) CalculateHash() []byte {
 		this.Type,
 		from,
 		to,
-		this.Value,
+		strconv.FormatInt(this.Value, 10),
 		this.Time,
 		signature,
 	}
@@ -656,7 +657,7 @@ func (this Transaction) NewHash() (string, error) {
 		this.Type,
 		fromBytes,
 		toBytes,
-		this.Value,
+		[]byte(strconv.FormatInt(this.Value, 10)),
 		codeBytes,
 		// []byte(this.Abi),
 		[]byte(this.Method),
@@ -707,6 +708,9 @@ func (this Transaction) Verify() error {
 	}
 	if this.From == this.To {
 		return errors.New("from address cannot equal to address")
+	}
+	if this.Time <= 0 {
+		return errors.New("invalid time")
 	}
 
 	// Type?
@@ -830,12 +834,21 @@ func (this *Transaction) UnmarshalJSON(bytes []byte) error {
 		}
 	}
 	if jsonMap["value"] != nil {
-		value, ok := jsonMap["value"].(float64)
-		if !ok {
-			return errors.Errorf("value for field 'value' must be a number")
+		var vFloat float64
+		value, ok1 := jsonMap["value"].(string)
+		if !ok1 {
+			var ok2 bool
+			vFloat, ok2 = jsonMap["value"].(float64)
+			if !ok2 {
+				return errors.Errorf("value for field 'value' must be a string")
+			}
+		} else {
+			vFloat, error = strconv.ParseFloat(value, 64)
+			if error != nil {
+			  return errors.Errorf("value for field 'value' must be convertable to an integer")
+			}
 		}
-		this.Value = int64(value)
-
+		this.Value = int64(vFloat)
 	}
 	if jsonMap["code"] != nil {
 		this.Code, ok = jsonMap["code"].(string)
@@ -885,9 +898,9 @@ func (this *Transaction) UnmarshalJSON(bytes []byte) error {
 		}
 	}
 	if jsonMap["hertz"] != nil {
-		hertz, ok := jsonMap["hertz"].(float64)
-		if !ok {
-			return errors.Errorf("value for field 'hertz' must be a number")
+		hertz, err := strconv.ParseInt(jsonMap["hertz"].(string), 10, 64)
+		if err != nil {
+		  return errors.Errorf("value for field 'hertz' must be a string convertable to an integer")
 		}
 		this.Hertz = uint64(hertz)
 	}
@@ -910,14 +923,14 @@ func (this Transaction) MarshalJSON() ([]byte, error) {
 		Type      byte          `json:"type"`
 		From      string        `json:"from"`
 		To        string        `json:"to,omitempty"`
-		Value     int64         `json:"value,omitempty"`
+		Value     int64         `json:"value,omitempty,string"`
 		Code      string        `json:"code,omitempty"`
 		Abi       string        `json:"abi,omitempty"`
 		Method    string        `json:"method,omitempty"`
 		Params    []interface{} `json:"params,omitempty"`
 		Time      int64         `json:"time"`
 		Signature string        `json:"signature"`
-		Hertz     uint64        `json:"hertz"`
+		Hertz     string        `json:"hertz,omitempty"`
 		Receipt   Receipt       `json:"receipt,omitempty"`
 		Gossip    []Rumor       `json:"gossip,omitempty"`
 		FromName  string        `json:"fromName,omitempty"`
@@ -934,7 +947,7 @@ func (this Transaction) MarshalJSON() ([]byte, error) {
 		Params:    this.Params,
 		Time:      this.Time,
 		Signature: this.Signature,
-		Hertz:     this.Hertz,
+		Hertz:     strconv.FormatUint(this.Hertz, 10),
 		Receipt:   this.Receipt,
 		Gossip:    this.Gossip,
 		FromName:  this.FromName,

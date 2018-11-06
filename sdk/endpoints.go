@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
-	"math/big"
 	"net/http"
 
 	"github.com/dispatchlabs/disgo/commons/types"
@@ -13,6 +12,8 @@ import (
 	"bytes"
 	"fmt"
 	"time"
+
+	"math/big"
 
 	"github.com/dispatchlabs/disgo/commons/utils"
 	"github.com/dispatchlabs/disgo/commons/crypto"
@@ -143,7 +144,12 @@ func GetAccount(delegateNode types.Node, address string) (*types.Account, error)
 }
 
 // PackageTx - Package a Transaction
-func PackageTx(to string, tokens int64, time int64 ) (*types.Transaction, error) {
+func PackageTx(to string, tokens int64, time int64) (*types.Transaction, error) {
+
+	// Valid time?
+	if time <= 0 {
+		return nil, errors.New("invalid time")
+	}
 
 	transaction, err := types.NewTransferTokensTransaction(types.GetKey(), types.GetAccount().Address, to, tokens, 0, time)
 	if err != nil {
